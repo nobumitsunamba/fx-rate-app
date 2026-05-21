@@ -24,6 +24,7 @@ export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -56,10 +57,15 @@ export default function ScanPage() {
 
   const stopCamera = useCallback(() => {
     if (controlsRef.current) {
-      try {
-        controlsRef.current.stop();
-      } catch {}
+      try { controlsRef.current.stop(); } catch {}
       controlsRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     readerRef.current = null;
     setScanning(false);
@@ -91,14 +97,33 @@ export default function ScanPage() {
     setError('');
     setScanning(true);
 
+    if (!videoRef.current) return;
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+    } catch (err) {
+      console.error(err);
+      setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
+      setScanning(false);
+      return;
+    }
+
+    streamRef.current = stream;
+    videoRef.current.srcObject = stream;
+    try {
+      await videoRef.current.play();
+    } catch {}
+
     try {
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
-      if (!videoRef.current) return;
-
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      const controls = await reader.decodeFromStream(
+        stream,
         videoRef.current,
         (result, err) => {
           if (result) {
@@ -108,15 +133,15 @@ export default function ScanPage() {
             setScannedCode(code);
             setStep('start');
           } else if (err && !(err instanceof NotFoundException)) {
-            console.error(err);
+            // 読み取り試行中の通常エラーは無視
           }
         }
       );
       controlsRef.current = controls;
     } catch (err) {
       console.error(err);
-      setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
-      setScanning(false);
+      setError('バーコードリーダーの起動に失敗しました。');
+      stopCamera();
     }
   }
 
