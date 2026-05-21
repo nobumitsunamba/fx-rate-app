@@ -24,6 +24,7 @@ export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -56,10 +57,15 @@ export default function ScanPage() {
 
   const stopCamera = useCallback(() => {
     if (controlsRef.current) {
-      try {
-        controlsRef.current.stop();
-      } catch {}
+      try { controlsRef.current.stop(); } catch {}
       controlsRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     readerRef.current = null;
     setScanning(false);
@@ -70,6 +76,60 @@ export default function ScanPage() {
       stopCamera();
     };
   }, [stopCamera]);
+
+  // scanningがtrueになってビデオ要素がDOMに描画された後にカメラを初期化する
+  useEffect(() => {
+    if (!scanning || step !== 'scan') return;
+
+    let active = true;
+
+    const init = async () => {
+      if (!videoRef.current) {
+        setError('カメラの準備ができませんでした。ページを再読み込みしてください。');
+        setScanning(false);
+        return;
+      }
+
+      try {
+        const reader = new BrowserMultiFormatReader();
+        readerRef.current = reader;
+
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
+          videoRef.current,
+          (result, err) => {
+            if (!active) return;
+            if (result) {
+              playBeep();
+              if (videoRef.current?.srcObject instanceof MediaStream) {
+                streamRef.current = videoRef.current.srcObject;
+              }
+              stopCamera();
+              setScannedCode(result.getText());
+              setStep('start');
+            } else if (err && !(err instanceof NotFoundException)) {
+              // 読み取り試行中の通常エラーは無視
+            }
+          }
+        );
+
+        if (!active) { controls.stop(); return; }
+        controlsRef.current = controls;
+        if (videoRef.current?.srcObject instanceof MediaStream) {
+          streamRef.current = videoRef.current.srcObject;
+        }
+      } catch (err) {
+        if (!active) return;
+        console.error(err);
+        setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
+        stopCamera();
+      }
+    };
+
+    init();
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning]);
 
   function playBeep() {
     try {
@@ -87,37 +147,10 @@ export default function ScanPage() {
     } catch {}
   }
 
-  async function startScan() {
+  function startScan() {
     setError('');
     setScanning(true);
-
-    try {
-      const reader = new BrowserMultiFormatReader();
-      readerRef.current = reader;
-
-      if (!videoRef.current) return;
-
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
-        videoRef.current,
-        (result, err) => {
-          if (result) {
-            playBeep();
-            const code = result.getText();
-            stopCamera();
-            setScannedCode(code);
-            setStep('start');
-          } else if (err && !(err instanceof NotFoundException)) {
-            console.error(err);
-          }
-        }
-      );
-      controlsRef.current = controls;
-    } catch (err) {
-      console.error(err);
-      setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
-      setScanning(false);
-    }
+    // カメラ初期化はuseEffectで行う（ビデオ要素がDOMに描画された後に実行されるため）
   }
 
   async function handleStart() {
