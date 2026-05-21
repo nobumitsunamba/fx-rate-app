@@ -97,7 +97,11 @@ export default function ScanPage() {
     setError('');
     setScanning(true);
 
-    if (!videoRef.current) return;
+    if (!videoRef.current) {
+      setError('カメラの準備ができませんでした。ページを再読み込みしてください。');
+      setScanning(false);
+      return;
+    }
 
     try {
       const reader = new BrowserMultiFormatReader();
@@ -322,7 +326,32 @@ export default function ScanPage() {
               <h2 className="text-white text-2xl font-bold">バーコードをスキャン</h2>
             </div>
 
-            {!scanning ? (
+            {/* video要素は常にDOMに存在させる（refをstartScan時に確実に取得するため） */}
+            <div className={scanning ? 'w-full flex flex-col items-center gap-4' : 'sr-only'}>
+              <div className="text-white text-base font-medium animate-pulse">
+                カメラ起動中... バーコードをカメラに向けてください
+              </div>
+              <div className="w-full relative rounded-2xl overflow-hidden bg-black aspect-video">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  playsInline
+                  muted
+                  autoPlay
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="border-2 border-yellow-400 w-3/4 h-1/3 rounded-lg opacity-70" />
+                </div>
+              </div>
+              <button
+                onClick={handleReset}
+                className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold text-lg rounded-xl py-4 min-h-[56px]"
+              >
+                キャンセル
+              </button>
+            </div>
+
+            {!scanning && (
               <button
                 onClick={startScan}
                 className="w-full bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-gray-900 font-bold text-xl rounded-2xl py-6 shadow-lg min-h-[80px] flex items-center justify-center gap-3"
@@ -333,31 +362,6 @@ export default function ScanPage() {
                 </svg>
                 作業指示番号をスキャン
               </button>
-            ) : (
-              <div className="w-full flex flex-col items-center gap-4">
-                <div className="text-white text-base font-medium animate-pulse">
-                  カメラ起動中... バーコードをカメラに向けてください
-                </div>
-                <div className="w-full relative rounded-2xl overflow-hidden bg-black aspect-video">
-                  <video
-                    ref={videoRef}
-                    className="w-full h-full object-cover"
-                    playsInline
-                    muted
-                    autoPlay
-                    webkit-playsinline="true"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="border-2 border-yellow-400 w-3/4 h-1/3 rounded-lg opacity-70" />
-                  </div>
-                </div>
-                <button
-                  onClick={handleReset}
-                  className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold text-lg rounded-xl py-4 min-h-[56px]"
-                >
-                  キャンセル
-                </button>
-              </div>
             )}
           </div>
         )}
