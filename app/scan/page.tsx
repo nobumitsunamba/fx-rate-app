@@ -19,6 +19,7 @@ export default function ScanPage() {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
@@ -123,6 +124,29 @@ export default function ScanPage() {
     setError('');
     setLoading(true);
     const supabase = createClient();
+
+    const { data: existing } = await supabase
+      .from('work_records')
+      .select('id')
+      .eq('work_order_no', scannedCode)
+      .is('completed_at', null)
+      .limit(1)
+      .single();
+
+    if (existing) {
+      setLoading(false);
+      setShowConfirm(true);
+      return;
+    }
+
+    await doInsert();
+  }
+
+  async function doInsert() {
+    setShowConfirm(false);
+    setError('');
+    setLoading(true);
+    const supabase = createClient();
     const now = new Date();
 
     const { data, error } = await supabase
@@ -206,6 +230,36 @@ export default function ScanPage() {
 
   return (
     <div className="min-h-screen bg-gray-800 flex flex-col">
+
+      {/* 確認ダイアログ */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6">
+            <h2 className="text-gray-900 text-xl font-bold mb-3">着手の確認</h2>
+            <p className="text-gray-700 text-base mb-1">
+              作業指示番号：<span className="font-bold">{scannedCode}</span>
+            </p>
+            <p className="text-gray-700 text-base mb-6">
+              すでに着手中の記録があります。続けて着手しますか？
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={doInsert}
+                className="w-full bg-green-500 hover:bg-green-400 text-white font-bold text-lg rounded-xl py-4 min-h-[56px]"
+              >
+                続けて着手する
+              </button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-base rounded-xl py-3 min-h-[48px]"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-gray-900 px-4 py-3 flex items-center justify-between">
         <div>
