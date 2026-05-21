@@ -1,0 +1,16 @@
+{
+  "name": "fx-rate-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "lint:html": "htmlhint index.html",
+    "lint:css": "stylelint index.html"
+  },
+  "devDependencies": {
+    "htmlhint": "1.9.2",
+    "postcss": "8.5.15",
+    "postcss-html": "1.8.0",
+    "stylelint": "16.19.1",
+    "stylelint-config-standard": "37.0.0"
+  }
+}
