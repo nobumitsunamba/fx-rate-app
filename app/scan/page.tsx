@@ -99,36 +99,21 @@ export default function ScanPage() {
 
     if (!videoRef.current) return;
 
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-    } catch (err) {
-      console.error(err);
-      setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
-      setScanning(false);
-      return;
-    }
-
-    streamRef.current = stream;
-    videoRef.current.srcObject = stream;
-    try {
-      await videoRef.current.play();
-    } catch {}
-
     try {
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
-      const controls = await reader.decodeFromStream(
-        stream,
+      const controls = await reader.decodeFromConstraints(
+        { video: { facingMode: { ideal: 'environment' } } },
         videoRef.current,
         (result, err) => {
           if (result) {
             playBeep();
             const code = result.getText();
+            // ストリーム参照を保存してから停止
+            if (videoRef.current?.srcObject instanceof MediaStream) {
+              streamRef.current = videoRef.current.srcObject;
+            }
             stopCamera();
             setScannedCode(code);
             setStep('start');
@@ -138,9 +123,13 @@ export default function ScanPage() {
         }
       );
       controlsRef.current = controls;
+      // 起動後にストリーム参照を保持
+      if (videoRef.current?.srcObject instanceof MediaStream) {
+        streamRef.current = videoRef.current.srcObject;
+      }
     } catch (err) {
       console.error(err);
-      setError('バーコードリーダーの起動に失敗しました。');
+      setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
       stopCamera();
     }
   }
@@ -356,6 +345,7 @@ export default function ScanPage() {
                     playsInline
                     muted
                     autoPlay
+                    webkit-playsinline="true"
                   />
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="border-2 border-yellow-400 w-3/4 h-1/3 rounded-lg opacity-70" />
