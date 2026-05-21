@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/browser';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { NotFoundException } from '@zxing/library';
 import { createClient } from '@/lib/supabase';
 import type { ScanStep } from '@/lib/types';
 
@@ -218,6 +219,12 @@ export default function ScanPage() {
             className="bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium px-3 py-2 rounded-lg min-h-[44px]"
           >
             実績一覧
+          </button>
+          <button
+            onClick={() => router.push('/profile')}
+            className="bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium px-3 py-2 rounded-lg min-h-[44px]"
+          >
+            名前変更
           </button>
           <button
             onClick={handleLogout}
