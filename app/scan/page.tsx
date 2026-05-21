@@ -77,6 +77,60 @@ export default function ScanPage() {
     };
   }, [stopCamera]);
 
+  // scanningがtrueになってビデオ要素がDOMに描画された後にカメラを初期化する
+  useEffect(() => {
+    if (!scanning || step !== 'scan') return;
+
+    let active = true;
+
+    const init = async () => {
+      if (!videoRef.current) {
+        setError('カメラの準備ができませんでした。ページを再読み込みしてください。');
+        setScanning(false);
+        return;
+      }
+
+      try {
+        const reader = new BrowserMultiFormatReader();
+        readerRef.current = reader;
+
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
+          videoRef.current,
+          (result, err) => {
+            if (!active) return;
+            if (result) {
+              playBeep();
+              if (videoRef.current?.srcObject instanceof MediaStream) {
+                streamRef.current = videoRef.current.srcObject;
+              }
+              stopCamera();
+              setScannedCode(result.getText());
+              setStep('start');
+            } else if (err && !(err instanceof NotFoundException)) {
+              // 読み取り試行中の通常エラーは無視
+            }
+          }
+        );
+
+        if (!active) { controls.stop(); return; }
+        controlsRef.current = controls;
+        if (videoRef.current?.srcObject instanceof MediaStream) {
+          streamRef.current = videoRef.current.srcObject;
+        }
+      } catch (err) {
+        if (!active) return;
+        console.error(err);
+        setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
+        stopCamera();
+      }
+    };
+
+    init();
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning]);
+
   function playBeep() {
     try {
       const ctx = new AudioContext();
@@ -93,49 +147,10 @@ export default function ScanPage() {
     } catch {}
   }
 
-  async function startScan() {
+  function startScan() {
     setError('');
     setScanning(true);
-
-    if (!videoRef.current) {
-      setError('カメラの準備ができませんでした。ページを再読み込みしてください。');
-      setScanning(false);
-      return;
-    }
-
-    try {
-      const reader = new BrowserMultiFormatReader();
-      readerRef.current = reader;
-
-      const controls = await reader.decodeFromConstraints(
-        { video: { facingMode: { ideal: 'environment' } } },
-        videoRef.current,
-        (result, err) => {
-          if (result) {
-            playBeep();
-            const code = result.getText();
-            // ストリーム参照を保存してから停止
-            if (videoRef.current?.srcObject instanceof MediaStream) {
-              streamRef.current = videoRef.current.srcObject;
-            }
-            stopCamera();
-            setScannedCode(code);
-            setStep('start');
-          } else if (err && !(err instanceof NotFoundException)) {
-            // 読み取り試行中の通常エラーは無視
-          }
-        }
-      );
-      controlsRef.current = controls;
-      // 起動後にストリーム参照を保持
-      if (videoRef.current?.srcObject instanceof MediaStream) {
-        streamRef.current = videoRef.current.srcObject;
-      }
-    } catch (err) {
-      console.error(err);
-      setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
-      stopCamera();
-    }
+    // カメラ初期化はuseEffectで行う（ビデオ要素がDOMに描画された後に実行されるため）
   }
 
   async function handleStart() {
@@ -326,32 +341,7 @@ export default function ScanPage() {
               <h2 className="text-white text-2xl font-bold">バーコードをスキャン</h2>
             </div>
 
-            {/* video要素は常にDOMに存在させる（refをstartScan時に確実に取得するため） */}
-            <div className={scanning ? 'w-full flex flex-col items-center gap-4' : 'sr-only'}>
-              <div className="text-white text-base font-medium animate-pulse">
-                カメラ起動中... バーコードをカメラに向けてください
-              </div>
-              <div className="w-full relative rounded-2xl overflow-hidden bg-black aspect-video">
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  playsInline
-                  muted
-                  autoPlay
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="border-2 border-yellow-400 w-3/4 h-1/3 rounded-lg opacity-70" />
-                </div>
-              </div>
-              <button
-                onClick={handleReset}
-                className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold text-lg rounded-xl py-4 min-h-[56px]"
-              >
-                キャンセル
-              </button>
-            </div>
-
-            {!scanning && (
+            {!scanning ? (
               <button
                 onClick={startScan}
                 className="w-full bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-gray-900 font-bold text-xl rounded-2xl py-6 shadow-lg min-h-[80px] flex items-center justify-center gap-3"
@@ -362,6 +352,30 @@ export default function ScanPage() {
                 </svg>
                 作業指示番号をスキャン
               </button>
+            ) : (
+              <div className="w-full flex flex-col items-center gap-4">
+                <div className="text-white text-base font-medium animate-pulse">
+                  カメラ起動中... バーコードをカメラに向けてください
+                </div>
+                <div className="w-full relative rounded-2xl overflow-hidden bg-black aspect-video">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    playsInline
+                    muted
+                    autoPlay
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="border-2 border-yellow-400 w-3/4 h-1/3 rounded-lg opacity-70" />
+                  </div>
+                </div>
+                <button
+                  onClick={handleReset}
+                  className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold text-lg rounded-xl py-4 min-h-[56px]"
+                >
+                  キャンセル
+                </button>
+              </div>
             )}
           </div>
         )}
