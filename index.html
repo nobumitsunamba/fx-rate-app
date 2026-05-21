@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>為替レート</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: #f0f2f5;
+      color: #2c3e50;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #1a2e4a;
+      letter-spacing: 0.02em;
+    }
+
+    header p {
+      margin-top: 6px;
+      font-size: 0.82rem;
+      color: #7f8c8d;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+      border-bottom: 1px solid #e8ecef;
+      flex-wrap: wrap;
+    }
+
+    .controls label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+      white-space: nowrap;
+    }
+
+    select {
+      flex: 1;
+      min-width: 140px;
+      padding: 9px 12px;
+      border: 1px solid #d1d9e0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      color: #2c3e50;
+      background: #fff;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus { border-color: #3a7bd5; }
+
+    button#refresh-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 20px;
+      background: #3a7bd5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    button#refresh-btn:hover { background: #2f65b8; }
+    button#refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.5);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    button#refresh-btn.loading .spinner { display: block; }
+    button#refresh-btn.loading .btn-text { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-bar {
+      padding: 8px 24px;
+      font-size: 0.78rem;
+      color: #7f8c8d;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e8ecef;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+    }
+
+    .error-msg {
+      padding: 16px 24px;
+      color: #c0392b;
+      background: #fdf2f2;
+      border-left: 4px solid #e74c3c;
+      font-size: 0.88rem;
+      display: none;
+    }
+
+    .loading-overlay {
+      padding: 60px 24px;
+      text-align: center;
+      color: #7f8c8d;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .loading-overlay .big-spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid #e8ecef;
+      border-top-color: #3a7bd5;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead tr {
+      background: #1a2e4a;
+      color: #c8d8ea;
+    }
+
+    thead th {
+      padding: 12px 20px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    thead th:last-child { text-align: right; }
+
+    tbody tr {
+      border-bottom: 1px solid #f0f2f5;
+      transition: background 0.15s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f7f9fc; }
+
+    tbody td {
+      padding: 14px 20px;
+      vertical-align: middle;
+    }
+
+    tbody td:last-child {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: #1a2e4a;
+      font-size: 0.95rem;
+    }
+
+    .currency-code {
+      font-weight: 700;
+      color: #3a7bd5;
+      font-size: 0.88rem;
+      letter-spacing: 0.04em;
+    }
+
+    .currency-name {
+      font-size: 0.8rem;
+      color: #7f8c8d;
+      margin-top: 2px;
+    }
+
+    .empty-msg {
+      padding: 48px 24px;
+      text-align: center;
+      color: #b0b8c4;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    @media (max-width: 480px) {
+      body { padding: 16px 10px; }
+      .controls { padding: 16px; }
+      thead th, tbody td { padding: 12px 14px; }
+      header h1 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>為替レート</h1>
+    <p>ExchangeRate-API によるリアルタイム為替レート</p>
+  </header>
+
+  <div class="card">
+    <div class="controls">
+      <label for="base-currency">基準通貨</label>
+      <select id="base-currency">
+        <option value="JPY">JPY — 日本円</option>
+        <option value="USD" selected>USD — 米ドル</option>
+        <option value="EUR">EUR — ユーロ</option>
+        <option value="GBP">GBP — 英ポンド</option>
+        <option value="CNY">CNY — 中国人民元</option>
+      </select>
+      <button id="refresh-btn" onclick="fetchRates()">
+        <div class="spinner"></div>
+        <span class="btn-text">更新</span>
+      </button>
+    </div>
+
+    <div class="status-bar" id="status-bar">通貨を選択して「更新」を押してください。</div>
+
+    <div class="error-msg" id="error-msg"></div>
+
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="big-spinner"></div>
+      レートを取得中…
+    </div>
+
+    <div class="table-wrap" id="table-wrap" style="display:none;">
+      <table>
+        <thead>
+          <tr>
+            <th>通貨</th>
+            <th style="text-align:right;">レート（1 <span id="th-base">USD</span> あたり）</th>
+          </tr>
+        </thead>
+        <tbody id="rate-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="empty-msg" id="empty-msg">表示できるレートがありません。</div>
+  </div>
+</div>
+
+<script>
+  const API_KEY = '09fec9694e01fce79459c06d';
+
+  const DISPLAY_CURRENCIES = [
+    { code: 'USD', name: '米ドル' },
+    { code: 'EUR', name: 'ユーロ' },
+    { code: 'GBP', name: '英ポンド' },
+    { code: 'JPY', name: '日本円' },
+    { code: 'CNY', name: '中国人民元' },
+    { code: 'AUD', name: 'オーストラリアドル' },
+    { code: 'CAD', name: 'カナダドル' },
+    { code: 'CHF', name: 'スイスフラン' },
+    { code: 'HKD', name: '香港ドル' },
+    { code: 'SGD', name: 'シンガポールドル' },
+    { code: 'KRW', name: '韓国ウォン' },
+    { code: 'INR', name: 'インドルピー' },
+    { code: 'MXN', name: 'メキシコペソ' },
+    { code: 'BRL', name: 'ブラジルレアル' },
+    { code: 'SEK', name: 'スウェーデンクローナ' },
+    { code: 'NOK', name: 'ノルウェークローネ' },
+    { code: 'DKK', name: 'デンマーククローネ' },
+    { code: 'NZD', name: 'ニュージーランドドル' },
+    { code: 'THB', name: 'タイバーツ' },
+    { code: 'ZAR', name: '南アフリカランド' },
+  ];
+
+  const btn = document.getElementById('refresh-btn');
+  const statusBar = document.getElementById('status-bar');
+  const errorMsg = document.getElementById('error-msg');
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const tableWrap = document.getElementById('table-wrap');
+  const emptyMsg = document.getElementById('empty-msg');
+  const tbody = document.getElementById('rate-tbody');
+  const thBase = document.getElementById('th-base');
+  const select = document.getElementById('base-currency');
+
+  select.addEventListener('change', fetchRates);
+
+  function setLoading(isLoading) {
+    btn.disabled = isLoading;
+    btn.classList.toggle('loading', isLoading);
+    loadingOverlay.style.display = isLoading ? 'block' : 'none';
+    if (isLoading) {
+      tableWrap.style.display = 'none';
+      emptyMsg.style.display = 'none';
+      errorMsg.style.display = 'none';
+    }
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    tableWrap.style.display = 'none';
+    emptyMsg.style.display = 'none';
+  }
+
+  function formatRate(base, code, rate) {
+    if (base === code) return '—';
+    if (['JPY', 'KRW', 'IDR', 'VND'].includes(code)) {
+      return rate.toLocaleString('ja-JP', { maximumFractionDigits: 4 });
+    }
+    return rate.toLocaleString('ja-JP', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+  }
+
+  async function fetchRates() {
+    const base = select.value;
+    setLoading(true);
+    statusBar.textContent = `${base} のレートを取得中…`;
+
+    try {
+      const res = await fetch(`https://v6.exchangerate-api.com/v6/${API_KEY}/latest/${base}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (data.result !== 'success') {
+        throw new Error(data['error-type'] || '取得エラー');
+      }
+
+      const rates = data.conversion_rates;
+      const rows = DISPLAY_CURRENCIES.filter(c => c.code !== base);
+
+      if (rows.length === 0) {
+        emptyMsg.style.display = 'block';
+      } else {
+        tbody.innerHTML = rows.map(({ code, name }) => {
+          const rate = rates[code];
+          const display = rate != null ? formatRate(base, code, rate) : '—';
+          return `<tr>
+            <td>
+              <div class="currency-code">${code}</div>
+              <div class="currency-name">${name}</div>
+            </td>
+            <td>${display}</td>
+          </tr>`;
+        }).join('');
+
+        thBase.textContent = base;
+        tableWrap.style.display = 'block';
+      }
+
+      const updated = new Date(data.time_last_update_utc);
+      statusBar.textContent = `最終更新: ${updated.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} (JST)`;
+
+    } catch (err) {
+      showError(`レートの取得に失敗しました: ${err.message}`);
+      statusBar.textContent = '取得に失敗しました。';
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  fetchRates();
+</script>
+</body>
+</html>
