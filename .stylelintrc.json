@@ -1,0 +1,11 @@
+{
+  "customSyntax": "postcss-html",
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "no-descending-specificity": null,
+    "alpha-value-notation": null,
+    "color-function-notation": null,
+    "declaration-block-single-line-max-declarations": null,
+    "media-feature-range-notation": null
+  }
+}
