@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { NotFoundException } from '@zxing/library';
+import { BarcodeFormat, DecodeHintType, NotFoundException } from '@zxing/library';
 import { createClient } from '@/lib/supabase';
 import type { ScanStep } from '@/lib/types';
 
@@ -91,11 +91,29 @@ export default function ScanPage() {
       }
 
       try {
-        const reader = new BrowserMultiFormatReader();
+        const hints = new Map<DecodeHintType, unknown>();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.CODE_93,
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.ITF,
+          BarcodeFormat.QR_CODE,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+
+        const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 300 });
         readerRef.current = reader;
 
         const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: 'environment' } } },
+          {
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
           videoRef.current,
           (result, err) => {
             if (!active) return;
