@@ -323,11 +323,8 @@ export default function ScanPage() {
           return;
         }
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('work-photos')
-          .getPublicUrl(fileName);
-
-        photoUrl = publicUrl;
+        // バケットの公開設定に関わらず機能するようファイルパスを保存
+        photoUrl = fileName;
       } catch {
         setError('写真のアップロードに失敗しました。もう一度お試しください。');
         setUploading(false);

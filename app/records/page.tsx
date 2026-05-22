@@ -11,6 +11,7 @@ export default function RecordsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalPhotoUrl, setModalPhotoUrl] = useState<string | null>(null);
+  const [photoSignedUrls, setPhotoSignedUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const supabase = createClient();
@@ -37,10 +38,37 @@ export default function RecordsPage() {
 
     if (error) {
       setError('データの取得に失敗しました。');
-    } else {
-      setRecords(data || []);
+      setLoading(false);
+      return;
     }
+
+    const fetched = data || [];
+    setRecords(fetched);
     setLoading(false);
+
+    // 写真がある記録の署名付きURLを生成（有効期限1時間）
+    const withPhotos = fetched.filter((r) => r.photo_url);
+    if (withPhotos.length === 0) return;
+
+    const urlMap: Record<string, string> = {};
+    await Promise.all(
+      withPhotos.map(async (r) => {
+        const path = extractStoragePath(r.photo_url!);
+        if (!path) return;
+        const { data: signed } = await supabase.storage
+          .from('work-photos')
+          .createSignedUrl(path, 3600);
+        if (signed) urlMap[r.id] = signed.signedUrl;
+      })
+    );
+    setPhotoSignedUrls(urlMap);
+  }
+
+  // photo_urlがフルURL（旧形式）でもパス（新形式）でも対応
+  function extractStoragePath(photoUrl: string): string | null {
+    if (!photoUrl.startsWith('http')) return photoUrl;
+    const match = photoUrl.match(/\/object\/(?:public|sign)\/work-photos\/(.+?)(?:\?|$)/);
+    return match ? match[1] : null;
   }
 
   function formatDateTime(iso: string | null) {
@@ -123,60 +151,69 @@ export default function RecordsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {records.map((record) => (
-              <div
-                key={record.id}
-                className="bg-white rounded-2xl shadow p-4"
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="text-gray-900 text-lg font-bold break-all flex-1">
-                    {record.work_order_no}
-                  </p>
-                  {record.completed_at === null ? (
-                    <span className="shrink-0 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                      作業中
-                    </span>
-                  ) : (
-                    <span className="shrink-0 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                      完了
-                    </span>
+            {records.map((record) => {
+              const signedUrl = record.photo_url ? photoSignedUrls[record.id] : null;
+              return (
+                <div
+                  key={record.id}
+                  className="bg-white rounded-2xl shadow p-4"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="text-gray-900 text-lg font-bold break-all flex-1">
+                      {record.work_order_no}
+                    </p>
+                    {record.completed_at === null ? (
+                      <span className="shrink-0 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        作業中
+                      </span>
+                    ) : (
+                      <span className="shrink-0 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        完了
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <div>
+                      <span className="text-gray-500">作業者</span>
+                      <p className="text-gray-800 font-medium">{record.username}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">作業時間</span>
+                      <p className="text-gray-800 font-medium">
+                        {calcMinutes(record.started_at, record.completed_at)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">着手</span>
+                      <p className="text-gray-800 font-medium">{formatDateTime(record.started_at)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">完了</span>
+                      <p className="text-gray-800 font-medium">{formatDateTime(record.completed_at)}</p>
+                    </div>
+                  </div>
+
+                  {record.photo_url && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                      <span className="text-gray-500 text-xs">作業写真</span>
+                      {signedUrl ? (
+                        <img
+                          src={signedUrl}
+                          alt="作業写真"
+                          className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 active:opacity-70"
+                          onClick={() => setModalPhotoUrl(signedUrl)}
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-400 text-xs">読込中</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                  <div>
-                    <span className="text-gray-500">作業者</span>
-                    <p className="text-gray-800 font-medium">{record.username}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">作業時間</span>
-                    <p className="text-gray-800 font-medium">
-                      {calcMinutes(record.started_at, record.completed_at)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">着手</span>
-                    <p className="text-gray-800 font-medium">{formatDateTime(record.started_at)}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">完了</span>
-                    <p className="text-gray-800 font-medium">{formatDateTime(record.completed_at)}</p>
-                  </div>
-                </div>
-
-                {record.photo_url && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-                    <span className="text-gray-500 text-xs">作業写真</span>
-                    <img
-                      src={record.photo_url}
-                      alt="作業写真"
-                      className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 active:opacity-70"
-                      onClick={() => setModalPhotoUrl(record.photo_url!)}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
