@@ -20,12 +20,16 @@ export default function ScanPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -224,31 +228,139 @@ export default function ScanPage() {
     setLoading(false);
   }
 
-  async function handleComplete() {
+  function handleComplete() {
     setError('');
-    setLoading(true);
-    const supabase = createClient();
+    setStep('photo');
+  }
 
-    const { error } = await supabase
+  async function resizeImage(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+
+        let { width, height } = img;
+        const MAX_DIM = 1280;
+
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas not supported')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { reject(new Error('Resize failed')); return; }
+            if (blob.size <= 1024 * 1024) {
+              resolve(blob);
+              return;
+            }
+            // 1MB超の場合は品質を下げて再試行
+            canvas.toBlob(
+              (blob2) => {
+                if (!blob2) { reject(new Error('Resize failed')); return; }
+                resolve(blob2);
+              },
+              'image/jpeg',
+              0.6
+            );
+          },
+          'image/jpeg',
+          0.82
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Image load failed'));
+      };
+
+      img.src = objectUrl;
+    });
+  }
+
+  function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    const previewUrl = URL.createObjectURL(file);
+    setPhotoFile(file);
+    setPhotoPreviewUrl(previewUrl);
+  }
+
+  async function handlePhotoComplete(skip: boolean) {
+    setError('');
+    setUploading(true);
+    const supabase = createClient();
+    let photoUrl: string | null = null;
+
+    if (!skip && photoFile) {
+      try {
+        const resized = await resizeImage(photoFile);
+        const safeOrderNo = scannedCode.replace(/[^a-zA-Z0-9\-_]/g, '_');
+        const fileName = `${safeOrderNo}_${userId}_${Date.now()}.jpg`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('work-photos')
+          .upload(fileName, resized, { contentType: 'image/jpeg', upsert: false });
+
+        if (uploadError) {
+          setError('写真のアップロードに失敗しました。もう一度お試しください。');
+          setUploading(false);
+          return;
+        }
+
+        // バケットの公開設定に関わらず機能するようファイルパスを保存
+        photoUrl = fileName;
+      } catch {
+        setError('写真のアップロードに失敗しました。もう一度お試しください。');
+        setUploading(false);
+        return;
+      }
+    }
+
+    const updatePayload: { completed_at: string; photo_url?: string } = {
+      completed_at: new Date().toISOString(),
+    };
+    if (photoUrl) updatePayload.photo_url = photoUrl;
+
+    const { error: dbError } = await supabase
       .from('work_records')
-      .update({ completed_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', recordId);
 
-    if (error) {
+    if (dbError) {
       setError('完了の登録に失敗しました。もう一度お試しください。');
-      setLoading(false);
+      setUploading(false);
       return;
     }
 
+    setUploading(false);
     setStep('completed');
-    setLoading(false);
 
+    const currentPreviewUrl = photoPreviewUrl;
     setTimeout(() => {
       setStep('scan');
       setScannedCode('');
       setRecordId('');
       setStartedAt(null);
       setElapsed(0);
+      setPhotoFile(null);
+      if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
+      setPhotoPreviewUrl(null);
     }, 3000);
   }
 
@@ -264,6 +376,9 @@ export default function ScanPage() {
     setScannedCode('');
     setStep('scan');
     setError('');
+    setPhotoFile(null);
+    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    setPhotoPreviewUrl(null);
   }
 
   function formatElapsed(sec: number) {
@@ -457,10 +572,82 @@ export default function ScanPage() {
 
             <button
               onClick={handleComplete}
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-2xl rounded-2xl py-6 shadow-lg min-h-[80px] disabled:opacity-50"
+              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-2xl rounded-2xl py-6 shadow-lg min-h-[80px]"
             >
-              {loading ? '登録中...' : '完　了'}
+              完　了
+            </button>
+          </div>
+        )}
+
+        {/* Step: photo */}
+        {step === 'photo' && (
+          <div className="w-full max-w-sm flex flex-col items-center gap-6">
+            <div className="text-center">
+              <div className="inline-block bg-purple-400 text-gray-900 text-sm font-bold px-4 py-1 rounded-full mb-3">
+                写真撮影
+              </div>
+              <h2 className="text-white text-2xl font-bold">作業完了の写真を撮影してください</h2>
+            </div>
+
+            {/* 非表示のファイル入力（カメラ起動用） */}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePhotoCapture}
+            />
+
+            {photoPreviewUrl ? (
+              <div className="w-full flex flex-col gap-4">
+                <img
+                  src={photoPreviewUrl}
+                  alt="撮影した写真"
+                  className="w-full rounded-2xl object-cover max-h-64"
+                />
+                <button
+                  onClick={() => handlePhotoComplete(false)}
+                  disabled={uploading}
+                  className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xl rounded-2xl py-5 shadow-lg min-h-[72px] disabled:opacity-50"
+                >
+                  {uploading ? 'アップロード中...' : 'この写真で完了する'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (photoInputRef.current) photoInputRef.current.value = '';
+                    setPhotoFile(null);
+                    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+                    setPhotoPreviewUrl(null);
+                  }}
+                  disabled={uploading}
+                  className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold text-base rounded-xl py-3 min-h-[48px] disabled:opacity-50"
+                >
+                  撮り直す
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full bg-purple-500 hover:bg-purple-400 active:bg-purple-600 text-white font-bold text-xl rounded-2xl py-6 shadow-lg min-h-[80px] flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                写真を撮影する
+              </button>
+            )}
+
+            <button
+              onClick={() => handlePhotoComplete(true)}
+              disabled={uploading}
+              className="w-full bg-gray-500 hover:bg-gray-400 text-white font-medium text-base rounded-xl py-3 min-h-[48px] disabled:opacity-50"
+            >
+              写真をスキップして完了する
             </button>
           </div>
         )}
