@@ -6,6 +6,7 @@ export interface WorkRecord {
   started_at: string;
   completed_at: string | null;
   created_at: string;
+  photo_url?: string | null;
 }
 
-export type ScanStep = 'scan' | 'start' | 'working' | 'completed';
+export type ScanStep = 'scan' | 'start' | 'working' | 'photo' | 'completed';

@@ -10,6 +10,7 @@ export default function RecordsPage() {
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [modalPhotoUrl, setModalPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -61,6 +62,32 @@ export default function RecordsPage() {
 
   return (
     <div className="min-h-screen bg-gray-800 flex flex-col">
+
+      {/* 写真拡大モーダル */}
+      {modalPhotoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setModalPhotoUrl(null)}
+        >
+          <div
+            className="relative max-w-full max-h-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={modalPhotoUrl}
+              alt="作業写真"
+              className="max-w-full max-h-[80vh] rounded-xl object-contain"
+            />
+            <button
+              onClick={() => setModalPhotoUrl(null)}
+              className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-9 h-9 flex items-center justify-center text-xl font-bold leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="bg-gray-900 px-4 py-3 flex items-center justify-between">
         <h1 className="text-white text-lg font-bold">実績一覧</h1>
         <div className="flex gap-2">
@@ -136,6 +163,18 @@ export default function RecordsPage() {
                     <p className="text-gray-800 font-medium">{formatDateTime(record.completed_at)}</p>
                   </div>
                 </div>
+
+                {record.photo_url && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                    <span className="text-gray-500 text-xs">作業写真</span>
+                    <img
+                      src={record.photo_url}
+                      alt="作業写真"
+                      className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 active:opacity-70"
+                      onClick={() => setModalPhotoUrl(record.photo_url!)}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
