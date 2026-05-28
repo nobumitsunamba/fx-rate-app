@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
 
 export default function LoginPage() {
@@ -84,6 +85,13 @@ export default function LoginPage() {
             {loading ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
+
+        <p className="text-center text-gray-500 text-sm mt-6">
+          アカウントがない場合は{' '}
+          <Link href="/register" className="text-blue-600 font-medium hover:underline">
+            新規登録
+          </Link>
+        </p>
       </div>
     </div>
   );
