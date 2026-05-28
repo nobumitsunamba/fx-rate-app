@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> };
 
+const PUBLIC_PATHS = ['/', '/register', '/auth/callback'];
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -33,13 +35,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (!user && pathname !== '/') {
+  if (!user && !PUBLIC_PATHS.includes(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
   }
 
-  if (user && pathname === '/') {
+  if (user && (pathname === '/' || pathname === '/register')) {
     const hasUsername = !!user.user_metadata?.full_name;
     const url = request.nextUrl.clone();
     url.pathname = hasUsername ? '/scan' : '/profile';
@@ -56,5 +58,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };
