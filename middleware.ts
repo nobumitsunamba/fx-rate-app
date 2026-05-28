@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> };
 
-const PUBLIC_PATHS = ['/', '/register'];
+const PUBLIC_PATHS = ['/', '/register', '/auth/callback'];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -41,7 +41,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && PUBLIC_PATHS.includes(pathname)) {
+  if (user && (pathname === '/' || pathname === '/register')) {
     const hasUsername = !!user.user_metadata?.full_name;
     const url = request.nextUrl.clone();
     url.pathname = hasUsername ? '/scan' : '/profile';

@@ -20,11 +20,12 @@ export default function RegisterPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: fullName.trim() },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -34,13 +35,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (data.session) {
-      router.push('/scan');
-      router.refresh();
-    } else {
-      setRegistered(true);
-      setLoading(false);
-    }
+    setRegistered(true);
+    setLoading(false);
   }
 
   if (registered) {
@@ -50,7 +46,7 @@ export default function RegisterPage() {
           <div className="text-5xl mb-4">📧</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">確認メールを送信しました</h1>
           <p className="text-gray-600 text-base mb-6">
-            <span className="font-medium">{email}</span> に確認メールを送りました。
+            <span className="font-medium">{email}</span> に確認メールを送りました。<br />
             メール内のリンクをクリックして登録を完了してください。
           </p>
           <Link
