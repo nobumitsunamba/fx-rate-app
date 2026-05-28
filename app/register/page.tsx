@@ -5,6 +5,24 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
 
+function getErrorMessage(error: { code?: string; message?: string }): string {
+  switch (error.code) {
+    case 'signup_disabled':
+      return '現在、新規登録は受け付けていません。管理者にお問い合わせください。';
+    case 'user_already_exists':
+    case 'email_exists':
+      return 'このメールアドレスはすでに登録されています。ログイン画面からサインインしてください。';
+    case 'weak_password':
+      return 'パスワードが短すぎます。6文字以上で入力してください。';
+    case 'over_email_send_rate_limit':
+      return 'メール送信の上限に達しました。しばらく待ってから再度お試しください。';
+    case 'invalid_email':
+      return 'メールアドレスの形式が正しくありません。';
+    default:
+      return `登録に失敗しました（${error.message ?? error.code ?? '不明なエラー'}）`;
+  }
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -30,7 +48,7 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setError('登録に失敗しました。メールアドレスまたはパスワードを確認してください。');
+      setError(getErrorMessage(error));
       setLoading(false);
       return;
     }
